@@ -10,5 +10,6 @@
     1. `db_smartinvest_username`: RDS instance username
     1. `db_smartinvest_password`: RDS instance password
     1. `apikey_alpha`: AlphaVantage API Key
+    1. `aws_account_id`: AWS account id
 
 1. Apply infra to the provider: `terraform apply -var-file="yourFile.tfvars"`
