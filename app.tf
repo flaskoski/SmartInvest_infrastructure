@@ -124,7 +124,8 @@ resource "aws_db_instance" "transactions_rds" {
     engine_version       = "8.0"
     instance_class       = "db.t2.micro"
     name                 = "dbSmartinvest"
-    # identifier           = "db-smartinvest"
+    port                 = 3306
+    identifier           = "${var.tf_prefix}db-transactions"
     username             = aws_ssm_parameter.ssm_db_smartinvest_username.value
     password             = aws_ssm_parameter.ssm_db_smartinvest_password.value
     parameter_group_name = "default.mysql8.0"
@@ -136,26 +137,38 @@ resource "aws_db_instance" "transactions_rds" {
 
 //---SSM Parameter Store
 resource "aws_ssm_parameter" "ssm_db_smartinvest_username" {
-  name  = "${var.springboot_transactions_ssm_params_prefix}${var.tf_prefix}RDS_SMARTINVEST_username"
-  type  = "SecureString"
-  value = var.db_smartinvest_username
-  overwrite = true
+    name  = "${var.springboot_transactions_ssm_params_prefix}${var.tf_prefix}RDS_SMARTINVEST_username"
+    type  = "SecureString"
+    value = var.db_smartinvest_username
+    overwrite = true
 }
 resource "aws_ssm_parameter" "ssm_db_smartinvest_password" {
-  name  = "${var.springboot_transactions_ssm_params_prefix}${var.tf_prefix}RDS_SMARTINVEST_PASSWORD"
-  type  = "SecureString"
-  value = var.db_smartinvest_password
-  overwrite = true
+    name  = "${var.springboot_transactions_ssm_params_prefix}${var.tf_prefix}RDS_SMARTINVEST_PASSWORD"
+    type  = "SecureString"
+    value = var.db_smartinvest_password
+    overwrite = true
+}
+resource "aws_ssm_parameter" "ssm_db_smartinvest_url" {
+    name = "${var.springboot_transactions_ssm_params_prefix}${var.tf_prefix}RDS_SMARTINVEST_URL"
+    value = "${aws_db_instance.transactions_rds.endpoint}/${aws_db_instance.transactions_rds.name}"
+    type  = "String"
+    overwrite = true
 }
 resource "aws_ssm_parameter" "ssm_apikey_alpha" {
-  name  = "${var.tf_prefix}API_KEY_ALPHA"
-  type  = "SecureString"
-  value = var.apikey_alpha
-  overwrite = true
+    name  = "${var.tf_prefix}API_KEY_ALPHA"
+    type  = "SecureString"
+    value = var.apikey_alpha
+    overwrite = true
 }
 resource "aws_ssm_parameter" "ssm_aws_account_id" {
-  name  = "${var.tf_prefix}aws_account_id"
-  type  = "SecureString"
-  value = var.aws_account_id
-  overwrite = true
+    name  = "${var.tf_prefix}aws_account_id"
+    type  = "SecureString"
+    value = var.aws_account_id
+    overwrite = true
+}
+resource "aws_ssm_parameter" "ssm_cognito_pool_id" {
+    name  = "${var.tf_prefix}smartinvest_cognito_pool_id"
+    type  = "SecureString"
+    value = var.cognito_pool_id
+    overwrite = true
 }

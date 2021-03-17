@@ -34,7 +34,6 @@ variable key_pair {
 
 variable allowed_ips {
   type        = list
-  default     = ["191.177.185.105/32"]
   description = "Allowed ips to communicate to the VPC"
 }
 
@@ -64,6 +63,11 @@ variable aws_account_id {
   type        = string
   description = "my account id"
   sensitive   = true
+}
+variable cognito_pool_id {
+  type        = string
+  sensitive   = true
+  description = "Smart Invest Cognito User Pool ID"
 }
 
 # Codepipeline vars
