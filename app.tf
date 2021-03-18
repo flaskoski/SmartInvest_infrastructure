@@ -1,6 +1,14 @@
 
 provider "aws" {
-    region = "sa-east-1"
+    region = var.region
+}
+
+resource "aws_vpc" "transactions_vpc" {
+  cidr_block = "172.31.0.0/16"
+
+#   tags = {
+#     Name = ""
+#   }
 }
 
 resource "aws_instance" "transactions_ec2" {
@@ -57,6 +65,12 @@ resource "aws_iam_role_policy" "transactions_rds_policy" {
             "Effect": "Allow",
             "Action": "rds:*",
             "Resource": aws_db_instance.transactions_rds.arn
+        },{
+            "Effect": "Allow",
+            "Action": [
+                "ssm:GetParametersByPath",
+                "ssm:GetParameter"],
+            "Resource": "arn:aws:ssm:${var.region}:${var.aws_account_id}:parameter/*"
         }
     ]
   })
@@ -118,6 +132,54 @@ resource "aws_security_group" "default_sg" {
     }
 }
 
+//----------------------ELB------------------
+resource "aws_lb_target_group" "transactions_tg"{
+    name = "${var.tf_prefix}tg-transactions"
+    port                               = 8080 
+    protocol                           = "HTTP"
+    protocol_version                   = "HTTP1"
+    vpc_id                             = aws_vpc.transactions_vpc.id
+    health_check {
+        enabled             = true
+        healthy_threshold   = 5
+        interval            = 30
+        matcher             = "200"
+        path                = "/"
+        port                = "traffic-port"
+        protocol            = "HTTP"
+        timeout             = 5
+        unhealthy_threshold = 2
+    }
+}
+resource "aws_lb" "transactions_lb" {
+    name = "${var.tf_prefix}elb-transactions"
+    internal           = false
+    load_balancer_type = "application"
+    security_groups    = [aws_security_group.default_sg.id]
+}
+resource "aws_lb_listener" "transactions_lb_listener" {
+  load_balancer_arn = aws_lb.transactions_lb.arn
+  port              = "443"
+  protocol          = "HTTPS"
+  ssl_policy        = "ELBSecurityPolicy-2016-08"
+  certificate_arn   = aws_iam_server_certificate.smartinvest_cert.arn
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.transactions_tg.arn
+  }
+}
+resource "aws_iam_server_certificate" "smartinvest_cert" {
+    name_prefix      = "cert-smartinvest"
+    certificate_body = file("cert/smartinvest-cert.pem")
+    private_key      = file("cert/smartinvest-key.pem")
+    lifecycle {
+        create_before_destroy = true
+    }
+}
+
+
+//----------------------RDS------------------------
 resource "aws_db_instance" "transactions_rds" {
     allocated_storage    = 10
     engine               = "mysql"
@@ -171,4 +233,113 @@ resource "aws_ssm_parameter" "ssm_cognito_pool_id" {
     type  = "SecureString"
     value = var.cognito_pool_id
     overwrite = true
+}
+resource "aws_ssm_parameter" "ssm_smartinvest_website_url" {
+    name  = "${var.tf_prefix}smartinvest_website_url"
+    type  = "String"
+    value = var.smartinvest_website_bucket_name
+    overwrite = true
+}
+resource "aws_ssm_parameter" "ssm_smartinvest_website_bucket_name" {
+    name  = "${var.tf_prefix}smartinvest_website_bucket_name"
+    type  = "String"
+    value = var.smartinvest_website_bucket_name
+    overwrite = true
+}
+resource "aws_ssm_parameter" "ssm_transactions_lb_url" {
+    name  = "${var.tf_prefix}transactions_lb_url"
+    type  = "String"
+    value = aws_lb.transactions_lb.dns_name
+    overwrite = true
+}
+
+//----------Smart Invest UI-------------
+resource "aws_s3_bucket" "smartinvest-s3-site" {
+    bucket = var.smartinvest_website_bucket_name
+    acl    = "public-read"
+    policy = jsonencode({
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "PublicReadGetObject",
+                "Effect": "Allow",
+                "Principal": "*",
+                "Action": "s3:GetObject",
+                "Resource": "arn:aws:s3:::${var.smartinvest_website_bucket_name}/*"
+            }
+        ]
+    })
+    website {
+        index_document = "index.html"
+        error_document = "index.html"
+    }
+}
+
+resource "aws_cognito_user_pool" "smartinvest_user_pool" {
+    name = "smartinvest-users"
+    schema {
+        attribute_data_type = "String"
+        developer_only_attribute = false
+        mutable = true
+        name = "email"
+        required = true
+
+        string_attribute_constraints{
+            max_length = "2048"
+            min_length = "0"
+        }
+    }
+    auto_verified_attributes = ["email",]
+    password_policy {
+        minimum_length                   = 8 
+        require_lowercase                = true
+        require_numbers                  = true
+        require_symbols                  = false
+        require_uppercase                = true
+        temporary_password_validity_days = 2
+    }
+    account_recovery_setting {
+        recovery_mechanism {
+            name     = "verified_email"
+            priority = 1
+        }
+    }
+    username_configuration {
+        case_sensitive = false
+    }
+}
+
+resource "aws_cognito_user_pool_client" "smartinvest_user_pool_client" {
+    name = "smartinvest"
+    user_pool_id = aws_cognito_user_pool.smartinvest_user_pool.id
+    callback_urls = [var.smartinvest_cloudfront_endpoint,]
+    logout_urls = [var.smartinvest_cloudfront_endpoint,]
+    supported_identity_providers = ["COGNITO"]
+    explicit_auth_flows = [
+        "ALLOW_CUSTOM_AUTH",
+        "ALLOW_REFRESH_TOKEN_AUTH",
+        "ALLOW_USER_SRP_AUTH",
+    ]
+    # allowed_oauth_scopes = [
+    #     "aws.cognito.signin.user.admin",
+    #     "email",
+    #     "profile",
+    # ]
+    read_attributes = [
+        "email",
+        "email_verified",
+        "name",
+        "nickname",
+        "preferred_username",
+        "profile",
+        "updated_at",
+        ]
+    write_attributes = [
+        "email",
+        "name",
+        "nickname",
+        "preferred_username",
+        "profile",
+        "updated_at",
+    ]
 }

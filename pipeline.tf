@@ -25,7 +25,7 @@ resource "aws_codepipeline" "transactions_pipeline" {
 
       configuration = {
         ConnectionArn    = aws_codestarconnections_connection.transactions_github_connection.arn
-        FullRepositoryId = "flaskoski/Transactions"
+        FullRepositoryId = var.github_repo_path
         BranchName       = "master"
       }
     }
@@ -158,7 +158,7 @@ resource "aws_iam_role_policy" "transactions_codepipeline_policy" {
         "Action": [
             "ec2:*"
         ],
-        "Resource": "${aws_instance.transactions_ec2[0].arn}",
+        "Resource": ["${join("\",\"", aws_instance.transactions_ec2[*].arn)}"],
         "Effect": "Allow"
     }
   ]
@@ -203,10 +203,10 @@ resource "aws_codedeploy_deployment_group" "transactions_codedeploy_group" {
 #     events  = ["DEPLOYMENT_FAILURE"]
 #   }
 
-  alarm_configuration {
+#   alarm_configuration {
     # alarms  = ["my-alarm-name"]
-    enabled = false
-  }
+    # enabled = false
+#   }
 }
 
 resource "aws_sns_topic" "transactions_snstopic_deployment" {

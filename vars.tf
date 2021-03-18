@@ -4,7 +4,11 @@ variable environment {
   default     = "dev"
   description = "description"
 }
-
+variable region {
+  type        = string
+  default     = "sa-east-1"
+  description = "region used"
+}
 variable tf_prefix {
   type        = string
   default     = "tf-"
@@ -21,7 +25,6 @@ variable appName {
   default     = "Transactions"
   description = "app name"
 }
-
 
 
 
@@ -69,10 +72,24 @@ variable cognito_pool_id {
   sensitive   = true
   description = "Smart Invest Cognito User Pool ID"
 }
+variable smartinvest_website_bucket_name {
+  type        = string
+  description = "s3 bucket name for the static site"
+}
+variable smartinvest_cloudfront_endpoint {
+  type        = string
+  description = "smartinvest cloudfront endpoint url"
+}
+
 
 # Codepipeline vars
 variable github_address {
   type        = string
   default     = "https://github.com/flaskoski/Transactions.git"
   description = "description"
+}
+variable github_repo_path {
+  type        = string
+  default     = "flaskoski/Transactions"
+  description = ""
 }
