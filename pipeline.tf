@@ -1,3 +1,16 @@
+//-------vars------------------------------
+variable github_address {
+  type        = string
+  default     = "https://github.com/flaskoski/Transactions.git"
+  description = "description"
+}
+variable github_repo_path {
+  type        = string
+  default     = "flaskoski/Transactions"
+  description = ""
+}
+
+
 //-------CodePipeline-----------------------
 
 resource "aws_codepipeline" "transactions_pipeline" {

@@ -1,8 +1,34 @@
 
+//----------------------EC2/ALB/VPC------------------------
+//---------------------------------------------------------
 provider "aws" {
     region = var.region
 }
 
+//-------vars---------------------------------------------
+variable key_pair {
+  type        = string
+  default     = "node-demo"
+  description = "smart-invest EC2 instances key pair"
+}
+variable allowed_ips {
+  type        = list
+  description = "Allowed ips to communicate to the VPC"
+}
+variable springboot_transactions_ssm_params_prefix {
+    type      = string
+    default   = "/config/Transactions/"
+}
+
+//---SSM Parameter Store------------------------------------
+resource "aws_ssm_parameter" "ssm_transactions_lb_url" {
+    name  = "${var.tf_prefix}transactions_lb_url"
+    type  = "String"
+    value = aws_lb.transactions_lb.dns_name
+    overwrite = true
+}
+
+//---------VPC------------------------------------
 resource "aws_vpc" "transactions_vpc" {
   cidr_block = "172.31.0.0/16"
 
@@ -11,6 +37,7 @@ resource "aws_vpc" "transactions_vpc" {
 #   }
 }
 
+//---------EC2------------------------------------
 resource "aws_instance" "transactions_ec2" {
     count = 1
     ami = "ami-0a0bc0fa94d632c94"
@@ -49,7 +76,7 @@ resource "aws_iam_role" "transactions_ec2_deploy_role" {
     ]
   })
 }
-
+//--EC2 policies
 resource "aws_iam_role_policy_attachment" "AmazonSSMManagedInstanceCore" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
   role       = aws_iam_role.transactions_ec2_deploy_role.name
@@ -100,7 +127,7 @@ resource "aws_iam_role_policy" "transactions_ec2_codedeploy_policy" {
     ]
   })
 }
-
+//--security group
 resource "aws_security_group" "default_sg" {
     name        = "${var.tf_prefix}default_sg"
     description = "Allow inbound traffic from default_sg and specific ip. Outbound traffic to anywhere"
@@ -132,7 +159,7 @@ resource "aws_security_group" "default_sg" {
     }
 }
 
-//----------------------ELB------------------
+//---------ELB------------------------------------
 resource "aws_lb_target_group" "transactions_tg"{
     name = "${var.tf_prefix}tg-transactions"
     port                               = 8080 
@@ -144,7 +171,7 @@ resource "aws_lb_target_group" "transactions_tg"{
         healthy_threshold   = 5
         interval            = 30
         matcher             = "200"
-        path                = "/"
+        path                = "/actuator"
         port                = "traffic-port"
         protocol            = "HTTP"
         timeout             = 5
@@ -169,6 +196,7 @@ resource "aws_lb_listener" "transactions_lb_listener" {
     target_group_arn = aws_lb_target_group.transactions_tg.arn
   }
 }
+//--ssl certificate
 resource "aws_iam_server_certificate" "smartinvest_cert" {
     name_prefix      = "cert-smartinvest"
     certificate_body = file("cert/smartinvest-cert.pem")
@@ -179,167 +207,4 @@ resource "aws_iam_server_certificate" "smartinvest_cert" {
 }
 
 
-//----------------------RDS------------------------
-resource "aws_db_instance" "transactions_rds" {
-    allocated_storage    = 10
-    engine               = "mysql"
-    engine_version       = "8.0"
-    instance_class       = "db.t2.micro"
-    name                 = "dbSmartinvest"
-    port                 = 3306
-    identifier           = "${var.tf_prefix}db-transactions"
-    username             = aws_ssm_parameter.ssm_db_smartinvest_username.value
-    password             = aws_ssm_parameter.ssm_db_smartinvest_password.value
-    parameter_group_name = "default.mysql8.0"
-    skip_final_snapshot  = true
-    publicly_accessible = true
-    vpc_security_group_ids=[aws_security_group.default_sg.id]
-}
 
-
-//---SSM Parameter Store
-resource "aws_ssm_parameter" "ssm_db_smartinvest_username" {
-    name  = "${var.springboot_transactions_ssm_params_prefix}${var.tf_prefix}RDS_SMARTINVEST_username"
-    type  = "SecureString"
-    value = var.db_smartinvest_username
-    overwrite = true
-}
-resource "aws_ssm_parameter" "ssm_db_smartinvest_password" {
-    name  = "${var.springboot_transactions_ssm_params_prefix}${var.tf_prefix}RDS_SMARTINVEST_PASSWORD"
-    type  = "SecureString"
-    value = var.db_smartinvest_password
-    overwrite = true
-}
-resource "aws_ssm_parameter" "ssm_db_smartinvest_url" {
-    name = "${var.springboot_transactions_ssm_params_prefix}${var.tf_prefix}RDS_SMARTINVEST_URL"
-    value = "${aws_db_instance.transactions_rds.endpoint}/${aws_db_instance.transactions_rds.name}"
-    type  = "String"
-    overwrite = true
-}
-resource "aws_ssm_parameter" "ssm_apikey_alpha" {
-    name  = "${var.tf_prefix}API_KEY_ALPHA"
-    type  = "SecureString"
-    value = var.apikey_alpha
-    overwrite = true
-}
-resource "aws_ssm_parameter" "ssm_aws_account_id" {
-    name  = "${var.tf_prefix}aws_account_id"
-    type  = "SecureString"
-    value = var.aws_account_id
-    overwrite = true
-}
-resource "aws_ssm_parameter" "ssm_cognito_pool_id" {
-    name  = "${var.tf_prefix}smartinvest_cognito_pool_id"
-    type  = "SecureString"
-    value = var.cognito_pool_id
-    overwrite = true
-}
-resource "aws_ssm_parameter" "ssm_smartinvest_website_url" {
-    name  = "${var.tf_prefix}smartinvest_website_url"
-    type  = "String"
-    value = var.smartinvest_website_bucket_name
-    overwrite = true
-}
-resource "aws_ssm_parameter" "ssm_smartinvest_website_bucket_name" {
-    name  = "${var.tf_prefix}smartinvest_website_bucket_name"
-    type  = "String"
-    value = var.smartinvest_website_bucket_name
-    overwrite = true
-}
-resource "aws_ssm_parameter" "ssm_transactions_lb_url" {
-    name  = "${var.tf_prefix}transactions_lb_url"
-    type  = "String"
-    value = aws_lb.transactions_lb.dns_name
-    overwrite = true
-}
-
-//----------Smart Invest UI-------------
-resource "aws_s3_bucket" "smartinvest-s3-site" {
-    bucket = var.smartinvest_website_bucket_name
-    acl    = "public-read"
-    policy = jsonencode({
-        "Version": "2012-10-17",
-        "Statement": [
-            {
-                "Sid": "PublicReadGetObject",
-                "Effect": "Allow",
-                "Principal": "*",
-                "Action": "s3:GetObject",
-                "Resource": "arn:aws:s3:::${var.smartinvest_website_bucket_name}/*"
-            }
-        ]
-    })
-    website {
-        index_document = "index.html"
-        error_document = "index.html"
-    }
-}
-
-resource "aws_cognito_user_pool" "smartinvest_user_pool" {
-    name = "smartinvest-users"
-    schema {
-        attribute_data_type = "String"
-        developer_only_attribute = false
-        mutable = true
-        name = "email"
-        required = true
-
-        string_attribute_constraints{
-            max_length = "2048"
-            min_length = "0"
-        }
-    }
-    auto_verified_attributes = ["email",]
-    password_policy {
-        minimum_length                   = 8 
-        require_lowercase                = true
-        require_numbers                  = true
-        require_symbols                  = false
-        require_uppercase                = true
-        temporary_password_validity_days = 2
-    }
-    account_recovery_setting {
-        recovery_mechanism {
-            name     = "verified_email"
-            priority = 1
-        }
-    }
-    username_configuration {
-        case_sensitive = false
-    }
-}
-
-resource "aws_cognito_user_pool_client" "smartinvest_user_pool_client" {
-    name = "smartinvest"
-    user_pool_id = aws_cognito_user_pool.smartinvest_user_pool.id
-    callback_urls = [var.smartinvest_cloudfront_endpoint,]
-    logout_urls = [var.smartinvest_cloudfront_endpoint,]
-    supported_identity_providers = ["COGNITO"]
-    explicit_auth_flows = [
-        "ALLOW_CUSTOM_AUTH",
-        "ALLOW_REFRESH_TOKEN_AUTH",
-        "ALLOW_USER_SRP_AUTH",
-    ]
-    # allowed_oauth_scopes = [
-    #     "aws.cognito.signin.user.admin",
-    #     "email",
-    #     "profile",
-    # ]
-    read_attributes = [
-        "email",
-        "email_verified",
-        "name",
-        "nickname",
-        "preferred_username",
-        "profile",
-        "updated_at",
-        ]
-    write_attributes = [
-        "email",
-        "name",
-        "nickname",
-        "preferred_username",
-        "profile",
-        "updated_at",
-    ]
-}
